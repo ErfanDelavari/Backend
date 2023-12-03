@@ -12,4 +12,13 @@ router.get('/', async function(req, res, next) {
   }
 });
 
+
+router.get("/:exerciseId", async function(req, res, next){
+  try {
+    res.json(await exercise.getSingle(req.params.exerciseId));
+  } catch (err) {
+    console.error(`Error while getting exercise`, err.message);
+    next(err);
+  }
+});
 module.exports = router;

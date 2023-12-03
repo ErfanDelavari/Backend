@@ -2,6 +2,87 @@ const db = require('./db');
 const helper = require('../helper');
 const { generateUrlFromFilePath } = require('../mediaProvider/mediaConfig');
 
+
+async function getSingle(exerciseId) {
+const exerciseQuery = `
+SELECT 
+    exercise.*,
+    GROUP_CONCAT(media.id) AS media_ids,
+    GROUP_CONCAT(media.file_path) AS media_filePaths,
+    GROUP_CONCAT(media.url) AS media_urls,
+    GROUP_CONCAT(media.type) AS media_types
+FROM exercise
+LEFT JOIN exercise_media ON exercise.id = exercise_media.exercise_id
+LEFT JOIN media ON exercise_media.media_id = media.id
+WHERE exercise.id = '${exerciseId}'
+GROUP BY exercise.id
+`;
+const exercise = await db.querySingle(exerciseQuery);
+
+const musclesQuery =`
+SELECT
+    muscle.*,
+    exercise_muscle.is_primary_muscle,
+    media.id AS media_id,
+    media.file_path AS media_filePath,
+    media.url AS media_url,
+    media.type AS media_type
+FROM muscle
+LEFT JOIN exercise_muscle ON muscle.id = exercise_muscle.muscle_id
+LEFT JOIN media ON muscle.media_id = media.id
+WHERE exercise_muscle.exercise_id = '${exerciseId}'
+GROUP BY muscle.id;
+`;
+const musclesRows  = await db.queryAllNoPagination(musclesQuery);
+const muscles = musclesRows.map(row => ({
+  ...row,
+  media : row.media_id ? generateMediaObject(row.media_id,row.media_type,row.media_url,row.media_filePath) : null,
+  media_id : undefined,
+  media_filePath : undefined,
+  media_url: undefined,
+  media_type: undefined
+}));
+
+const equipmentQuery =`
+SELECT
+    equipment.*,
+    media.id AS media_id,
+    media.file_path AS media_filePath,
+    media.url AS media_url,
+    media.type AS media_type
+FROM equipment
+LEFT JOIN exercise_equipment ON equipment.id = exercise_equipment.equipment_id
+LEFT JOIN media ON equipment.media_id = media.id
+WHERE exercise_equipment.exercise_id = '${exerciseId}';
+`;
+const equipmentRows = await db.queryAllNoPagination(equipmentQuery)
+const equipments = equipmentRows.map(row => ({
+  ...row,
+  media : row.media_id ? generateMediaObject(row.media_id,row.media_type,row.media_url,row.media_filePath) : null,
+  media_id : undefined,
+  media_filePath : undefined,
+  media_url: undefined,
+  media_type: undefined
+}));
+const data ={
+  ...exercise,
+  equipments,
+  muscles,
+  instructions: exercise.instructions ? JSON.parse(exercise.instructions) : [],
+  medias: generateMediaArray(exercise),
+  // Exclude unwanted fields from the root of each exercise object
+  media_ids: undefined,
+  media_filePaths: undefined,
+  media_types: undefined,
+  media_urls: undefined,
+
+}
+return {
+  data
+}
+}
+
+
 async function getMultiple(req) {
   let page = 1;
   if (req.query.page) { page = req.query.page };
@@ -16,9 +97,7 @@ async function getMultiple(req) {
             GROUP_CONCAT(media.id) AS media_ids,
             GROUP_CONCAT(media.file_path) AS media_filePaths,
             GROUP_CONCAT(media.url) AS media_urls,
-            GROUP_CONCAT(media.is_video) AS media_is_videos,
-            GROUP_CONCAT(media.is_gif) AS media_is_gifs,
-            GROUP_CONCAT(media.is_image) AS media_is_images
+            GROUP_CONCAT(media.type) AS media_types
         FROM exercise
         LEFT JOIN exercise_media ON exercise.id = exercise_media.exercise_id
         LEFT JOIN media ON exercise_media.media_id = media.id
@@ -28,18 +107,16 @@ async function getMultiple(req) {
   }
   query += `GROUP BY exercise.id`;
 
-  const rows = await db.query(query, page, pageSize);
+  const rows = await db.queryAll(query, page, pageSize);
 
   const data = rows.map(row => ({
     ...row,
     instructions: row.instructions ? JSON.parse(row.instructions) : [],
-    media: generateMediaArray(row),
+    medias: generateMediaArray(row),
     // Exclude unwanted fields from the root of each exercise object
     media_ids: undefined,
     media_filePaths: undefined,
-    media_is_videos: undefined,
-    media_is_gifs: undefined,
-    media_is_images: undefined,
+    media_types: undefined,
     media_urls: undefined,
   }));
   const meta = { page, pageSize, search };
@@ -55,34 +132,23 @@ function generateMediaArray(row) {
   const mediaIds = row.media_ids ? row.media_ids.split(',') : [];
   const mediaFilePaths = row.media_filePaths ? row.media_filePaths.split(',') : [];
   const mediaUrls = row.media_urls ? row.media_urls.split(',') : [];
-  const isVideos = row.media_is_videos ? row.media_is_videos.split(',') : [];
-  const isGifs = row.media_is_gifs ? row.media_is_gifs.split(',') : [];
-  const isImages = row.media_is_images ? row.media_is_images.split(',') : [];
+  const mediaTypes = row.media_types ? row.media_types.split(',') : [];
 
   for (let i = 0; i < mediaIds.length; i++) {
-    const mediaObject = {
-      id: parseInt(mediaIds[i]),
-      type: generateMediaType(isVideos[i], isGifs[i], isImages[i]),
-      url: mediaUrls[i] ? mediaUrls[i] : generateUrlFromFilePath(mediaFilePaths[i])
-    };
-    mediaArray.push(mediaObject);
+    mediaArray.push(generateMediaObject(mediaIds[i],mediaTypes[i],mediaUrls[i],mediaFilePaths[i]));
   }
 
   return mediaArray;
 }
 
-function generateMediaType(isVideo, isGif, isImage) {
-  if (isVideo === '1') {
-    return 'video';
-  } else if (isGif === '1') {
-    return 'gif';
-  } else if (isImage === '1') {
-    return 'image';
-  } else {
-    return 'unknown'; // You can adjust this as needed
-  }
+function generateMediaObject(id ,type ,url,filePath){
+  return {
+    id : parseInt(id),
+    type : type,
+    url: url ? url : generateUrlFromFilePath(filePath)
+  };
 }
-
 module.exports = {
-  getMultiple
+  getMultiple,
+  getSingle
 }
