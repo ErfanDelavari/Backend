@@ -23,6 +23,3 @@ app.use((err, req, res, next) => {
     res.status(statusCode).json({ message: err.message });
     return;
 });
-app.listen(process.env.PORT, () => {
-    console.log(`Example app listening at http://localhost:${process.env.PORT}`);
-});
