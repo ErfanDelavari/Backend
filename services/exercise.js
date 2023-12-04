@@ -75,7 +75,6 @@ const data ={
   media_filePaths: undefined,
   media_types: undefined,
   media_urls: undefined,
-
 }
 return {
   data
