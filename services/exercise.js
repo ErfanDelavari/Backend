@@ -89,7 +89,6 @@ async function getMultiple(req) {
   if (req.query.pageSize) { pageSize = req.query.pageSize };
   let search = null;
   if (req.query.search) { search = req.query.search };
-  const offset = helper.getOffset(page, pageSize);
   let query = `
         SELECT 
             exercise.*,
@@ -102,7 +101,7 @@ async function getMultiple(req) {
         LEFT JOIN media ON exercise_media.media_id = media.id
     `;
   if (search) {
-    const decodedSearchTerm = decodeURIComponent(searchTerm);
+    const decodedSearchTerm = decodeURIComponent(search);
     query += ` WHERE exercise.name LIKE '%${decodedSearchTerm}%' COLLATE NOCASE`;
   }
   query += `GROUP BY exercise.id`;
