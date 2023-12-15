@@ -100,11 +100,12 @@ async function getMultiple(req) {
         LEFT JOIN exercise_media ON exercise.id = exercise_media.exercise_id
         LEFT JOIN media ON exercise_media.media_id = media.id
     `;
+
+  query += `GROUP BY exercise.id`;
   if (search) {
     const decodedSearchTerm = decodeURIComponent(search);
     query += ` WHERE exercise.name LIKE '%${decodedSearchTerm}%' COLLATE NOCASE`;
   }
-  query += `GROUP BY exercise.id`;
 
   const rows = await db.queryAll(query, page, pageSize);
 
